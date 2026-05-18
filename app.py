@@ -108,10 +108,7 @@ def upload_video():
 
 @app.route("/download/<unique_id>", methods=["GET"])
 def download_video(unique_id):
-    """
-    Once the status is 'Completed', the user hits this route to download their file.
-    """
-    from flask import send_file
+
     output_path = f"output/{unique_id}.mp4"
     
     if os.path.exists(output_path):
