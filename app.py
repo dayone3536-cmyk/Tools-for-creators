@@ -1,23 +1,18 @@
-from flask import Flask, render_template, send_file, request, jsonify
+from flask import Flask, render_template, send_file, request, after_this_request
 import os
 
-import threading
 
 import subprocess
-
 import uuid
-from google import genai
 
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv("api_key.env")
 
-
 API_KEY = os.getenv("key")
 
 app = Flask(__name__)
-
-
 
 @app.route("/")
 def welcoming_page():
@@ -44,82 +39,58 @@ def displaying():
 def sumbitting_the_video():
     return render_template("video-edit.html")
 
-
-video_status_db = {}
-def background_video_editor(input_path, output_path, unique_id):
-
+@app.route("/upload", methods=["POST"])
+def upload_and_stream_video():
     try:
-        # Update status to processing
-        video_status_db[unique_id] = "Processing: Running auto-editor..."
-        
-        command = f"auto-editor {input_path} --quiet --no-open --output {output_path} --margin 0.2s --video_codec h264 --audio_codec aac"
+        # 1. Grab the uploaded file from the request
+        video = request.files["file"]
 
+        # 2. Use Render's local temporary folder
+        os.makedirs("/tmp/uploads", exist_ok=True)
+        os.makedirs("/tmp/output", exist_ok=True)
+
+        unique_id = str(uuid.uuid4())
+        
+        input_path = f"/tmp/uploads/{unique_id}.mp4"
+        output_path = f"/tmp/output/{unique_id}.mp4"
+
+
+        video.save(input_path)
+        print(f"Successfully cached raw upload to: {input_path}")
+
+        # 4. Run auto-editor synchronously (holds connection open while processing)
+
+        command = f"auto-editor {input_path} --output {output_path} --margin 0.2s --video_codec h264 --audio_codec aac --no_open"
+        
         
         subprocess.run(command, shell=True, check=True)
         
-        # Once finished, update the status
-        video_status_db[unique_id] = "Completed"
+        short_id = unique_id[:4]
 
-        print(f"Successfully processed video for ID: {unique_id}")
-        
-    except Exception as e:
-        video_status_db[unique_id] = f"Failed: {str(e)}"
-        print(f"Error processing video {unique_id}: {e}")
-
-
-@app.route("/upload", methods=["POST"])
-def upload_video():
-    try:
-        # 1. Grab the uploaded file
-        video = request.files["file"]
-
-        # 2. Setup folders
-        os.makedirs("uploads", exist_ok=True)
-        os.makedirs("output", exist_ok=True)
-
-        # 3. Create unique file paths
-        unique_id = str(uuid.uuid4())
-        input_path = f"uploads/{unique_id}.mp4"
-        output_path = f"output/{unique_id}.mp4"
-
-        # 4. Save the raw uploaded file
-        video.save(input_path)
+        @after_this_request
+        def remove_temporary_files(response):
+            try:
+                if os.path.exists(input_path):
+                    os.remove(input_path)
+                    
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                print(f"Successfully cleaned up /tmp storage files for ID: {unique_id}")
+                
+            except Exception as cleanup_error:
+                print(f"Non-fatal error cleaning temporary files: {cleanup_error}")
+                
+            return response
 
 
-        video_status_db[unique_id] = "Uploaded. Waiting to start..."
-
-        # 6. THE MAGIC: Start the background thread
-        # This kicks off the background_video_editor function but instantly moves to the next line!
-        thread = threading.Thread(
-            target=background_video_editor, 
-            args=(input_path, output_path, unique_id)
+        return send_file(
+            output_path, 
+            as_attachment=True, 
+            download_name=f"edited_{short_id}.mp4"
         )
-        thread.start()
-
-        # 7. Instantly return a response! The user's browser won't crash.
-        return render_template("progress.html", unique_id=unique_id)
 
     except Exception as e:
-        print(f"Upload error: {e}")
-        # If you have an upload-error.html file, you can keep using it:
         return render_template("upload-error.html")
 
 
-
-@app.route("/download/<unique_id>", methods=["GET"])
-def download_video(unique_id):
-
-    output_path = f"output/{unique_id}.mp4"
-
-    if video_status_db[unique_id] == "Completed":
-        
-        if os.path.exists(output_path):
-            return send_file(output_path, as_attachment=True)
-            
-        else:
-            return "File not found or still processing.", 404
-
-
-if __name__ == "__main__":
     
-    app.run(debug=True, threaded=True)
