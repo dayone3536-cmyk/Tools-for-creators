@@ -52,9 +52,9 @@ def background_video_editor(input_path, output_path, unique_id):
         # Update status to processing
         video_status_db[unique_id] = "Processing: Running auto-editor..."
         
-        command = f"auto-editor {input_path} --output {output_path} --margin 0.4s --video_codec h264 --audio_codec aac"
+        command = f"auto-editor {input_path} --quiet --output {output_path} --margin 0.4s --video_codec h264 --audio_codec aac"
+
         
-        # Run the auto-editor (this takes time, but it's okay because it's in the background!)
         subprocess.run(command, shell=True, check=True)
         
         # Once finished, update the status
