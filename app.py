@@ -110,11 +110,14 @@ def upload_video():
 def download_video(unique_id):
 
     output_path = f"output/{unique_id}.mp4"
-    
-    if os.path.exists(output_path):
-        return send_file(output_path, as_attachment=True)
-    else:
-        return "File not found or still processing.", 404
+
+    if video_status_db[unique_id] == "Completed":
+        
+        if os.path.exists(output_path):
+            return send_file(output_path, as_attachment=True)
+            
+        else:
+            return "File not found or still processing.", 404
 
 
 if __name__ == "__main__":
