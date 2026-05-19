@@ -97,7 +97,7 @@ def upload_video():
         thread.start()
 
         # 7. Instantly return a response! The user's browser won't crash.
-        return render_template("progress.html")
+        return render_template("progress.html", unique_id=unique_id)
 
     except Exception as e:
         print(f"Upload error: {e}")
