@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Start the Flask app using Gunicorn with threads enabled
-CMD ["gunicorn", "--threads", "4", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--threads", "4", "app:app"]
